@@ -1,4 +1,5 @@
 import struct
+import socket
 from functools import lru_cache
 from typing import Any
 
@@ -7,7 +8,7 @@ class Endianity:
     BIG = ">"
     LITTLE = "<"
 
-
+##### a field of a packet (mac, ip, size, ...)
 class Field:
     FORMAT = ''
     DEFAULT_NAME = ""
@@ -92,3 +93,33 @@ class MacAddress(Field):
     @lru_cache()
     def mac2str(mac):
         return ":".join("{:02X}".format(octet) for octet in mac)
+
+
+class IPv4Address(Field):
+    FORMAT = "4s"                   # size in bytes
+
+    def __init__(self, name="ipv4", default="0.0.0.0"):
+        super().__init__(name, self.str2ip(default))
+
+    def format_val(self):
+        return self.ip2str(self.val)
+
+    def set(self, value):
+        if type(value) is str:
+            value = self.str2ip(value)
+
+        super().set(value)
+
+    @staticmethod
+    @lru_cache()
+    def str2ip(val):
+        return socket.inet_aton(val)
+
+    @staticmethod
+    @lru_cache()
+    def ip2str(ip):
+        return socket.inet_ntoa(ip)
+
+
+# ARP: Hardware type, Protocol type, Hardware size, Protocol size, Opcode, src MAC, src IP, dst MAC, dst IP         2s2s1s1s2s6s4s6s4s
+
