@@ -14,18 +14,49 @@ class ArpLayer(Layer):
 
     SUB_LAYERS = []
 
+    # Getters
+    def get_src_mac(self):
+        return self.fields["src_mac"].get()
+    
+    def get_dest_mac(self):
+        return self.fields["dst_mac"].get()
+    
+    def get_src_ip(self):
+        return self.fields["src_ip"].get()
+    
+    def get_dest_ip(self):
+        return self.fields["dst_ip"].get()
+
+    def get_opcode(self):
+        return self.fields["opcode"].get()
+
+    # Setters
+    def set_src_mac(self, val):
+        self.fields["src_mac"].set(val)
+    
+    def set_dest_mac(self, val):
+        self.fields["dst_mac"].set(val)
+    
+    def set_src_ip(self, val):
+        self.fields["src_ip"].set(val)
+    
+    def set_dest_ip(self, val):
+        self.fields["dst_ip"].set(val)
+
+    def set_opcode(self, val):
+        self.fields["opcode"].set(val)
+
     @staticmethod
     def fields_info():
-        # Hardware type, Protocol type, Hardware size, Protocol size, Opcode, src MAC, src IP, dst MAC, dst IP 2s2s1s1s2s6s4s6s4s
         return [UnsignedShort("hw_type", HW_TYPE),
                 UnsignedShort("prot_type", IPv4Layer.ETHR_TYPE),
                 UnsignedByte("hw_size", HW_SIZE),
                 UnsignedByte("prot_size", IPv4Layer.PROTO_SIZE),
                 UnsignedShort("opcode", ArpLayer.OP_WHO_HAS),
-                MacAddress("src"),
-                IPv4Address("src"),
-                MacAddress("dst", ArpLayer.MAC_UNKNOWN),
-                IPv4Address("dst")]
+                MacAddress("src_mac"),
+                IPv4Address("src_ip"),
+                MacAddress("dst_mac", ArpLayer.MAC_UNKNOWN),
+                IPv4Address("dst_ip")]
 
 
 class IPv4Layer(Layer):
@@ -39,6 +70,26 @@ class IPv4Layer(Layer):
         [ICMPLayer, CONNECTOR_FIELD, ICMPLayer.PROTOCOL_ID]
         # FTP/SSH/NC
     ]
+
+    # Getters
+    def get_src_ip(self):
+        return self.fields["src"].get()
+    
+    def get_dest_ip(self):
+        return self.fields["dst"].get()
+
+    def get_protocol(self):
+        return self.fields["protocol"].get()
+
+    # Setters
+    def set_src_ip(self, val):
+        self.fields["src"].set(val)
+    
+    def set_dest_ip(self, val):
+        self.fields["dst"].set(val)
+
+    def set_protocol(self, val):
+        self.fields["protocol"].set(val)
 
     @staticmethod
     def fields_info():

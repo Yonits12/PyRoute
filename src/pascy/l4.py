@@ -7,6 +7,7 @@ class ICMPLayer(Layer):
     TYPE_ECHO_REQST = 8
     CODE_ECHO = 0
     PROTOCOL_ID = 1
+    SIZE_OF_DATA = 56
 
     NAME = "ICMP"
 
@@ -14,13 +15,12 @@ class ICMPLayer(Layer):
 
     @staticmethod
     def fields_info():
-        # Hardware type, Protocol type, Hardware size, Protocol size, Opcode, src MAC, src IP, dst MAC, dst IP 2s2s1s1s2s6s4s6s4s
         return [UnsignedByte("type", ICMPLayer.TYPE_ECHO_REQST),
-                UnsignedByte("code", ICMPLayer.CODE),
+                UnsignedByte("code", ICMPLayer.CODE_ECHO),
                 UnsignedShort("checksum", 0),
                 UnsignedShort("identifier", 0),
-                UnsignedShort("sequence_number", 0)]
-                #TODO: DATA
+                UnsignedShort("sequence_number", 0),
+                ByteString("data", SIZE_OF_DATA, "")]
 
 # ===========================================================================
 # 

@@ -4,19 +4,25 @@ import socket
 import binascii
 import struct
 from pascy.l2 import *
+from pascy.l3 import *
+from pascy.l4 import *
 from pascy.layer import *
 from pascy.fields import *
 
-HOST = '1.1.1.1'  # Standard loopback interface address (localhost)
-PORT = 0        # Port to listen on (non-privileged ports are > 1023)
-DEBUG = False
+
+class RoutingTuple:
+    
+    def __init__(self, network_dst, netmask, interface):
+        self.network_dst = network_dst
+        self.netmask = netmask
+        self.interface = interface
 
 
 class Interface:
     
     def __init__(self, ip, mac, name):
-        self.ip = bytes.fromhex(ip)
-        self.mac = bytes.fromhex(mac)
+        self.ip = socket.inet_aton(ip)
+        self.mac = mac
         self.name = name
     
     def get_ip(self):
@@ -31,28 +37,32 @@ class Interface:
 
 class Router:
 
-    DEFAULT_IP = '0.0.0.0'
+    DEFAULT = '0.0.0.0'
     NET1_IP = '1.1.1.1'
     NET2_IP = '2.2.2.1'
+    MASK_24_SUBNET = '255.255.255.0'
     ETH_TYPE_ARP = b'\x08\x06'
     ETH_TYPE_IPV4 = b'\x08\x00'
 
-    MAC_ROUTER_NET1 = '024236e04043'
-    MAC_ROUTER_NET2 = '024200338246'
-    CLIENT1_MAC = '024201010102'
-    CLIENT2_MAC = '024202020202'
+    MAC_ROUTER_NET1 = '02:42:36:E0:40:43'
+    MAC_ROUTER_NET2 = '02:42:00:33:82:46'
+    CLIENT1_MAC = '02:42:01:01:01:02'
+    CLIENT2_MAC = '02:42:02:02:02:02'
 
-    ARP_FORMAT = "2s2s1s1s2s6s4s6s4s"
-    IP_FORMAT = "9s1s2s4s4s"
-    ICMP_FORMAT = "1s1s2s4s"
+    INTERFACE_MAPPER = {MAC_ROUTER_NET1: 'net1',
+                        MAC_ROUTER_NET2: 'net2'}
+
+    ROUTING_TABLE = {(DEFAULT, DEFAULT, None),
+                    ('1.1.1.0', MASK_24_SUBNET, NET1_IP),
+                    ('2.2.2.0', MASK_24_SUBNET, NET2_IP)}
 
     BUF_SIZE = 2048
-    ETHERNET_END = 14
 
 
     def __init__(self):
         self.net1 = Interface(Router.NET1_IP, Router.MAC_ROUTER_NET1, 'net1')
         self.net2 = Interface(Router.NET2_IP, Router.MAC_ROUTER_NET2, 'net2')
+        self.requested_interface = None
         self.arp_tbl = {}
         self.ip_tbl = {}
 
@@ -83,47 +93,82 @@ class Router:
         print("Rest:      ", binascii.hexlify(icmp_detailed[3]))
         print("*************************************************\n")
 
-    def handle_arp(self, arp_packet, ethernet_detailed, ethertype, interface):
+    def handle_ether(self, ether_struct):
+         # ethernet handling
+        if ether_struct.get_ether_type() == ArpLayer.ETHR_TYPE:
+            arp_response_packet = self.handle_arp(ether_struct)
+            if arp_response_packet is None:
+                return
+            arp_response_packet.display()       #DEBUG
+            with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as arp_socket:
+                arp_socket.bind((self.requested_interface, 0))
+                arp_socket.send(arp_response_packet.build())
+
+        elif ether_struct.get_ether_type() == IPv4Layer.ETHR_TYPE:
+            ip_response_packet = self.handle_ip(ether_struct)
+            if ip_response_packet is None:
+                return
+            print("___________  IP_RESPONSE:  __________")
+            ip_response_packet.display()    #DEBUG
+            with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as ip_socket:
+                src_mac = ip_response_packet.get_src()
+                src_mac = MacAddress.mac2str(src_mac)
+                name = self.INTERFACE_MAPPER[src_mac]
+                ip_socket.bind((name, 0))    # TODO bind to correct interface
+                ip_socket.send(ip_response_packet.build())
+
+    def handle_arp(self, packet):
         '''
         Handles ARP requests by unpacking them and constructing a respose packet (if needded).
         Prints the ARP packet contents.
         '''
-        arp_packet = EthernetLayer() / ArpLayer
-
-        
-        if self.common_network(socket.inet_ntoa(arp_detailed[8]), socket.inet_ntoa(arp_detailed[6])):
+        arp_request = packet.next_layer
+        if arp_request.get_opcode() == ArpLayer.OP_IS_AT:
             return None
+        response_packet = EthernetLayer() / ArpLayer()
+        arp_header = response_packet.next_layer
         
-        resp_opcode = bytes.fromhex('0002')
+        # if self.common_network(socket.inet_ntoa(arp_request.get_src_ip()), socket.inet_ntoa(arp_request.get_dest_ip())):
+        #     return None
         
-        if interface == 'net1':
-            source_mac = self.net1.get_mac()
-            source_ip = self.net1.get_ip()
-        else:
-            source_mac = self.net2.get_mac()
-            source_ip = self.net2.get_ip()
+        response_packet.set_dst(packet.get_src())
+        response_packet.set_ether_type(ArpLayer.ETHR_TYPE)
 
-        new_ethernet_header = ethernet_detailed[1] + source_mac + ethertype
-        arp_response = arp_header[:6] + resp_opcode + source_mac + source_ip + arp_detailed[5] + arp_detailed[6]
-        response_packet = new_ethernet_header + arp_response
+        arp_header.set_opcode(ArpLayer.OP_IS_AT)
+        if self.requested_interface == 'net1':
+            response_packet.set_src(self.net1.get_mac())
+            arp_header.set_src_mac(self.net1.get_mac())
+            arp_header.set_src_ip(self.net1.get_ip())
+        else:       #TODO so redunant to else for just net2... dict it
+            response_packet.set_src(self.net2.get_mac())
+            arp_header.set_src_mac(self.net2.get_mac())
+            arp_header.set_src_ip(self.net2.get_ip())
+
+        arp_header.set_dest_mac(arp_request.get_src_mac())
+        arp_header.set_dest_ip(arp_request.get_src_ip())
+
         return response_packet
 
-    def handle_ip(self, ip_packet, ethertype, ethernet_detailed):
-        ip_header = ip_packet[0][14:34]       # IP is 20 bytes payload
-        ip_detailed = struct.unpack(Router.IP_FORMAT, ip_header)
-        icmp_header = ip_packet[0][34:42]       # ICMP is 8 bytes payload
-        icmp_detailed = struct.unpack(Router.ICMP_FORMAT, icmp_header)
-        self.print_ping(ethertype, ethernet_detailed, ip_detailed, icmp_detailed)
+    def handle_icmp(self, packet):
+        ether = packet
+        ip_layer = packet.next_layer
+        dest_ip = socket.inet_ntoa(ip_layer.get_dest_ip())
+        if dest_ip == '2.2.2.2':
+            ether.set_dst(Router.CLIENT2_MAC)
+            ether.set_src(Router.MAC_ROUTER_NET2)
+        elif dest_ip == '1.1.1.2':
+            ether.set_dst(Router.CLIENT1_MAC)
+            ether.set_src(Router.MAC_ROUTER_NET1)
+        return packet
         
-        if icmp_detailed[0] == b'08':
-            new_ethernet_header = bytes.fromhex(Router.CLIENT1_MAC) + bytes.fromhex(Router.MAC_ROUTER_NET1) + ethertype
-            ping_response = new_ethernet_header + ip_header + icmp_header 
-            return ping_response
-        elif icmp_detailed[0] == b'00':
-            new_ethernet_header = bytes.fromhex(Router.CLIENT2_MAC) + bytes.fromhex(Router.MAC_ROUTER_NET2) + ethertype
-            ping_response = new_ethernet_header + ip_header + icmp_header 
-            return ping_response
-        else: 
+
+    def handle_ip(self, packet):
+        ip_request = packet.next_layer
+        if ip_request.get_protocol() == ICMPLayer.PROTOCOL_ID:
+            return self.handle_icmp(packet)
+        else:
+            # not implemented yet
+            response_packet = EthernetLayer() / IPv4Layer()
             return None
 
     def create_ip_packet(self, request_packet):
@@ -135,55 +180,23 @@ class Router:
         '''
         with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as raw_socket:
             while True:
-                packet, interface = raw_socket.recvfrom(Router.BUF_SIZE)
-                if interface[0] not in ['net1', 'net2']:
+                packet = raw_socket.recvfrom(Router.BUF_SIZE)
+                packet_data, interface = packet
+                self.requested_interface = interface[0]
+                
+                # print("packet of type: ", interface[1])
+                if self.requested_interface not in ['net1', 'net2', 'veth931e985', 'veth37b30f9']:
+                    self.requested_interface = None
                     continue
-
-                # ethernet handling
-                interface = interface[0]
-                ether_header = EthernetLayer()
-                packet = ether_header.deserialize(packet)
-
-
-                ethernet_header = packet_data[0:14]       # ARP is 14 bytes payload
-                ethernet_detailed = struct.unpack("!6s6s2s", ethernet_header)
-                ethertype = ethernet_detailed[2]
-                print("\nDEBUG: ethertype\n", ethertype)
-                
-                if ethertype == Router.ETH_TYPE_ARP:
-                    arp_response_packet = self.handle_arp(packet, ethernet_detailed, ethertype, interface)
-                    if arp_response_packet is None:
-                        continue
-                    with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as arp_socket:
-                        arp_socket.bind(("net2", 0))    # TODO bind to correct interface
-                        arp_socket.send(arp_response_packet)
-
-                elif ethertype == Router.ETH_TYPE_IPV4:
-                    ip_response_packet = self.handle_ip(packet, ethertype, ethernet_detailed)
-                    if ip_response_packet is None:
-                        continue
-                    with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as ip_socket:
-                        ip_socket.bind(("net1", 0))    # TODO bind to correct interface
-                        ip_socket.send(ip_response_packet)
-                
+                print("from interface: ", interface[0], " at leg: ", MacAddress.mac2str(interface[4]))
+                layer_struct = EthernetLayer()
+                layer_struct.deconstruct(packet_data)
+                if MacAddress.mac2str(layer_struct.get_src()) in [Router.MAC_ROUTER_NET1, Router.MAC_ROUTER_NET2]:
+                    continue
+                print("____________ deconstruct _____________") # DEBUG
+                layer_struct.display()      # DEBUG
+                self.handle_ether(layer_struct)
 
 
-# router = Router()
-# router.observe_traffic()
-
-
-with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as raw_socket:
-    while True:
-        packet = raw_socket.recvfrom(Router.BUF_SIZE)
-        packet_data, interface = packet
-        interface = interface[0]
-        if interface not in ['net1', 'net2']:
-            continue
-        
-        ethr = EthernetLayer()
-        ethr.display()  # DEBUG
-        ethr.deconstruct(packet_data)
-        print("____________ deconstruct _____________") # DEBUG
-        ethr.display()      # DEBUG
-
-        
+router = Router()
+router.observe_traffic()
