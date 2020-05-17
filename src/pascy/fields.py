@@ -44,7 +44,9 @@ class Field:
         return struct.pack(self.ENDIANITY + self.FORMAT, self.val)
     
     def deserialize(self, buffer: bytes):
-        self.val = struct.unpack(self.ENDIANITY + self.FORMAT, buffer[:self.size])[0]
+        buf = buffer[:self.size]
+        val = struct.unpack(self.ENDIANITY + self.FORMAT, buf)[0]
+        self.val = val
 
 
 class UnsignedByte(Field):
@@ -119,7 +121,4 @@ class IPv4Address(Field):
     @lru_cache()
     def ip2str(ip):
         return socket.inet_ntoa(ip)
-
-
-# ARP: Hardware type, Protocol type, Hardware size, Protocol size, Opcode, src MAC, src IP, dst MAC, dst IP         2s2s1s1s2s6s4s6s4s
 

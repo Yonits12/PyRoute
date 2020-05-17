@@ -6,6 +6,7 @@ from functools import lru_cache
 class Layer(ABC):
     NAME = ""
     SUB_LAYERS = []
+    CONNECTOR_FIELD = ""
 
     def __init__(self):
         self.next_layer = None
@@ -56,6 +57,7 @@ class Layer(ABC):
         """
         pass
 
+
     def display(self):
         content = ""
         indent = ""
@@ -104,10 +106,20 @@ class Layer(ABC):
 
     def deserialize(self, buffer: bytes):
         """
-        Deserialize this layer from a buffer
+        Deserialize this layer from a buffer into the it's fields.
+
+        :param buffer: the raw data of the source packet to desrialize.
+        :returns: the remain un-deserialized data.
+        :rtype: bytes
         """
-        # TODO: Implement this :)
-        pass
+        fields = OrderedDict()
+        for f in self.fields_info():
+            f.deserialize(buffer)
+            fields[f.name] = f
+            buffer = buffer[len(f):]
+        self.fields = fields
+        return buffer
+        
 
     def build(self) -> bytes:
         """
@@ -119,6 +131,18 @@ class Layer(ABC):
         else:
             return self.serialize()
 
+    def deconstruct(self, buffer:bytes):
+        '''
+        Deconstructs a raw packet to a layers hirarchy.
+
+        :param buffer: the raw packet from the socket
+        '''
+        buffer = self.deserialize(buffer)
+        for layer, _, val in self.SUB_LAYERS:
+            if val == self.fields[self.CONNECTOR_FIELD].get():        # find the value of the indicator which have just deserialized.
+                self / layer()                 # connect the relevant sub-layer
+                self.next_layer.deconstruct(buffer)     # recurse to inner layer
+
     def __len__(self) -> int:
         """
         :return:    The size (in bytes) of the entire packet's raw data
@@ -129,11 +153,11 @@ class Layer(ABC):
         else:
             return self.size
 
-    def connect_layer(self, other):
-        for layer, field, val in self.SUB_LAYERS:
+    def connect_layer(self, other): # self = EthernetLayer, other is ArpLayer
+        for layer, field, val in self.SUB_LAYERS:       # check if the Inner layer (Arp) is in the SUB_LAYERS of self ()
             if isinstance(other, layer):
-                self.last_layer.fields[field].set(val)
-                self.last_layer = other
+                self.last_layer.fields[field].set(val)      # if so, adding some important data to the last (most inner so far) layer about the inner layer
+                self.last_layer = other                     # then add this layer as last
 
                 if not self.next_layer:
                     self.next_layer = other
@@ -141,5 +165,8 @@ class Layer(ABC):
                     self.next_layer.connect_layer(other)
 
                 return self
-
-        raise Exception("Can't link {} and {}.".format(self.__class__.__name__, other.__class__.__name__))
+        if self.next_layer:                     # if we are here -> the other layer isn't in the SUB_LAYERS so try to connect next layer
+            self.next_layer.connect_layer(other)    
+            self.last_layer = other             # this will happen only if connect succeeded (otherwise exception thrown)
+        else:
+            raise Exception("Can't link {} and {}.".format(self.__class__.__name__, other.__class__.__name__))
