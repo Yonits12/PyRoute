@@ -20,7 +20,7 @@ class ICMPLayer(Layer):
                 UnsignedShort("checksum", 0),
                 UnsignedShort("identifier", 0),
                 UnsignedShort("sequence_number", 0),
-                ByteString("data", SIZE_OF_DATA, "")]
+                ByteString("data", ICMPLayer.SIZE_OF_DATA, "")]
 
 # ===========================================================================
 # 

@@ -98,7 +98,7 @@ class MacAddress(Field):
 
 
 class IPv4Address(Field):
-    FORMAT = "4s"                   # size in bytes
+    FORMAT = "4s"
 
     def __init__(self, name="ipv4", default="0.0.0.0"):
         super().__init__(name, self.str2ip(default))

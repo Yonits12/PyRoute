@@ -139,9 +139,10 @@ class Layer(ABC):
         '''
         buffer = self.deserialize(buffer)
         for layer, _, val in self.SUB_LAYERS:
-            if val == self.fields[self.CONNECTOR_FIELD].get():        # find the value of the indicator which have just deserialized.
-                self / layer()                 # connect the relevant sub-layer
-                self.next_layer.deconstruct(buffer)     # recurse to inner layer
+            # find the relevant layer using the indicator which have just deserialized.
+            if val == self.fields[self.CONNECTOR_FIELD].get():
+                self / layer()
+                self.next_layer.deconstruct(buffer)
 
     def __len__(self) -> int:
         """
@@ -153,11 +154,18 @@ class Layer(ABC):
         else:
             return self.size
 
-    def connect_layer(self, other): # self = EthernetLayer, other is ArpLayer
-        for layer, field, val in self.SUB_LAYERS:       # check if the Inner layer (Arp) is in the SUB_LAYERS of self ()
+    def connect_layer(self, other):
+        '''
+        Taking a layer structure and connects it as a sub-layer.
+
+        :param other: instance of a layer to connect
+        :returns: self with other as it's sub-layer
+        :rtype: Layer
+        '''
+        for layer, field, val in self.SUB_LAYERS:
             if isinstance(other, layer):
-                self.last_layer.fields[field].set(val)      # if so, adding some important data to the last (most inner so far) layer about the inner layer
-                self.last_layer = other                     # then add this layer as last
+                self.last_layer.fields[field].set(val)
+                self.last_layer = other
 
                 if not self.next_layer:
                     self.next_layer = other
@@ -165,8 +173,8 @@ class Layer(ABC):
                     self.next_layer.connect_layer(other)
 
                 return self
-        if self.next_layer:                     # if we are here -> the other layer isn't in the SUB_LAYERS so try to connect next layer
+        if self.next_layer:
             self.next_layer.connect_layer(other)    
-            self.last_layer = other             # this will happen only if connect succeeded (otherwise exception thrown)
+            self.last_layer = other
         else:
             raise Exception("Can't link {} and {}.".format(self.__class__.__name__, other.__class__.__name__))
