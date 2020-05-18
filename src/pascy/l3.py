@@ -1,68 +1,15 @@
 from pascy.layer import Layer
-from pascy.fields import *
+from pascy.fields import UnsignedByte, UnsignedShort, MacAddress, IPv4Address
 from pascy.l4 import ICMPLayer
 
-HW_TYPE = 0x0001
-HW_SIZE = 0x06
-
-class ArpLayer(Layer):
-    NAME = "ARP"
-    OP_WHO_HAS = 1
-    OP_IS_AT = 2
-    ETHR_TYPE = 0x806
-    MAC_UNKNOWN = "00:00:00:00:00:00"
-
-    SUB_LAYERS = []
-
-    # Getters
-    def get_src_mac(self):
-        return self.fields["src_mac"].get()
-    
-    def get_dest_mac(self):
-        return self.fields["dst_mac"].get()
-    
-    def get_src_ip(self):
-        return self.fields["src_ip"].get()
-    
-    def get_dest_ip(self):
-        return self.fields["dst_ip"].get()
-
-    def get_opcode(self):
-        return self.fields["opcode"].get()
-
-    # Setters
-    def set_src_mac(self, val):
-        self.fields["src_mac"].set(val)
-    
-    def set_dest_mac(self, val):
-        self.fields["dst_mac"].set(val)
-    
-    def set_src_ip(self, val):
-        self.fields["src_ip"].set(val)
-    
-    def set_dest_ip(self, val):
-        self.fields["dst_ip"].set(val)
-
-    def set_opcode(self, val):
-        self.fields["opcode"].set(val)
-
-    @staticmethod
-    def fields_info():
-        return [UnsignedShort("hw_type", HW_TYPE),
-                UnsignedShort("prot_type", IPv4Layer.ETHR_TYPE),
-                UnsignedByte("hw_size", HW_SIZE),
-                UnsignedByte("prot_size", IPv4Layer.PROTO_SIZE),
-                UnsignedShort("opcode", ArpLayer.OP_WHO_HAS),
-                MacAddress("src_mac"),
-                IPv4Address("src_ip"),
-                MacAddress("dst_mac", ArpLayer.MAC_UNKNOWN),
-                IPv4Address("dst_ip")]
 
 
 class IPv4Layer(Layer):
     NAME = "IPv4"
     ETHR_TYPE = 0x800
     PROTO_SIZE = 0x04
+    HW_TYPE = 0x0001
+    HW_SIZE = 0x06
     CONNECTOR_FIELD = "protocol"
 
     SUB_LAYERS = [

@@ -9,12 +9,19 @@ from pascy.l4 import *
 from pascy.layer import *
 from pascy.fields import *
 
+class RoutingEntry:
+
+    def __init__(self, subnet, mask, interface_ip):
+        self.subnet = subnet
+        self.mask = mask
+        self.interface_ip = interface_ip
 
 class RoutingTable:
     MASK_24_SUBNET = socket.inet_aton('255.255.255.0')
     DEFAULT = '0.0.0.0'
     NET1_IP = '1.1.1.1'
     NET2_IP = '2.2.2.1'
+    ENDIANITY = 'big'
     ROUTING_TABLE = {(DEFAULT, DEFAULT, None),
                     ('1.1.1.0', MASK_24_SUBNET, NET1_IP),
                     ('2.2.2.0', MASK_24_SUBNET, NET2_IP)}
@@ -29,9 +36,9 @@ class RoutingTable:
         :rtype: string
         '''
         for entry in RoutingTable.ROUTING_TABLE:        # TODO should be sorted
-            dest_ip_int = int.from_bytes(socket.inet_aton(dest_ip), 'big')
-            mask_int = int.from_bytes(RoutingTable.MASK_24_SUBNET, 'big')
-            entry_subnet_int = int.from_bytes(socket.inet_aton(entry[0]), 'big')
+            dest_ip_int = int.from_bytes(socket.inet_aton(dest_ip), RoutingTable.ENDIANITY)
+            mask_int = int.from_bytes(RoutingTable.MASK_24_SUBNET, RoutingTable.ENDIANITY)
+            entry_subnet_int = int.from_bytes(socket.inet_aton(entry[0]), RoutingTable.ENDIANITY)
             if dest_ip_int & mask_int == entry_subnet_int:
                 return entry[2] # the interface
         return None # TODO unreachable because default
@@ -79,34 +86,38 @@ class Router:
     CLIENT2_IP = '2.2.2.2'
     CLIENT1_IP = '1.1.1.2'
     BUF_SIZE = 2048
+    GGP = 0x0003
 
     def __init__(self):
-        self.net1 = Interface(Router.NET1_IP, Router.MAC_ROUTER_NET1, Router.NET1_NAME)
-        self.net2 = Interface(Router.NET2_IP, Router.MAC_ROUTER_NET2, Router.NET2_NAME)
+        net1 = Interface(Router.NET1_IP, Router.MAC_ROUTER_NET1, Router.NET1_NAME)
+        net2 = Interface(Router.NET2_IP, Router.MAC_ROUTER_NET2, Router.NET2_NAME)
+        self.interfaces = { net1.get_name(): net1,
+                            net2.get_name(): net2}
         self.requested_interface = None
         self.arp_tbl = {}
         self.routing_tbl = RoutingTable()
 
     def handle_ether(self, ether_struct):
-         # ethernet handling
-        if ether_struct.get_ether_type() == ArpLayer.ETHR_TYPE:
-            arp_response_packet = self.handle_arp(ether_struct)
-            if arp_response_packet is None:
-                return
-            with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as arp_socket:
-                arp_socket.bind((self.requested_interface, 0))
-                arp_socket.send(arp_response_packet.build())
+        '''
+        Handles Ethernet packets by their ethernet type.
+        Triggers the relevant router's activity, including sending 
+        response packet (if neccessary).
 
+        :param ether_struct: the entire deconstructed packet as a Layers hirarchy.
+        '''
+        if ether_struct.get_ether_type() == ArpLayer.ETHR_TYPE:
+            response_packet = self.handle_arp(ether_struct)
+            interface = self.requested_interface  
         elif ether_struct.get_ether_type() == IPv4Layer.ETHR_TYPE:
-            ip_response_packet = self.handle_ip(ether_struct)
-            if ip_response_packet is None:
-                return
-            with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as ip_socket:
-                src_mac = ip_response_packet.get_src()
-                src_mac = MacAddress.mac2str(src_mac)
-                name = self.INTERFACE_MAC2NAME[src_mac]
-                ip_socket.bind((name, 0))
-                ip_socket.send(ip_response_packet.build())
+            response_packet = self.handle_ip(ether_struct)
+            src_mac = MacAddress.mac2str(response_packet.get_src())
+            interface = self.INTERFACE_MAC2NAME[src_mac]
+        
+        if response_packet is None:
+            return
+        with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(Router.GGP)) as raw_socket:
+            raw_socket.bind((interface, 0))
+            raw_socket.send(response_packet.build())
 
     def handle_arp(self, packet):
         '''
@@ -115,25 +126,20 @@ class Router:
         :param packet: the entire deconstructed packet
         :returns: a response packet after arp handling
         '''
+        interface = self.interfaces[self.requested_interface]
         arp_request = packet.next_layer
         if arp_request.get_opcode() == ArpLayer.OP_IS_AT:
             return None
+        
         response_packet = EthernetLayer() / ArpLayer()
-        arp_header = response_packet.next_layer
-
         response_packet.set_dst(packet.get_src())
+        response_packet.set_src(interface.get_mac())
         response_packet.set_ether_type(ArpLayer.ETHR_TYPE)
+        
+        arp_header = response_packet.next_layer
         arp_header.set_opcode(ArpLayer.OP_IS_AT)
-
-        if self.requested_interface == Router.NET1_NAME:
-            response_packet.set_src(self.net1.get_mac())
-            arp_header.set_src_mac(self.net1.get_mac())
-            arp_header.set_src_ip(self.net1.get_ip())
-        else:
-            response_packet.set_src(self.net2.get_mac())
-            arp_header.set_src_mac(self.net2.get_mac())
-            arp_header.set_src_ip(self.net2.get_ip())
-
+        arp_header.set_src_mac(interface.get_mac())
+        arp_header.set_src_ip(interface.get_ip())
         arp_header.set_dest_mac(arp_request.get_src_mac())
         arp_header.set_dest_ip(arp_request.get_src_ip())
 
@@ -157,7 +163,7 @@ class Router:
             return None
         
         elif self.INTERFACE_NAME2IP[self.requested_interface] == route_interface_ip:
-            if dest_ip not in [self.net1.get_ip(), self.net2.get_ip()]:
+            if dest_ip not in [inter.get_ip() for inter in self.interfaces.values()]:
                 # Common netwok. Drop
                 return None
         # ICMP
@@ -177,13 +183,13 @@ class Router:
         '''
         Gets incoming packets from net1 net2 interfaces and handles them.
         '''
-        with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)) as raw_socket:
+        with socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(Router.GGP)) as raw_socket:
             while True:
                 packet = raw_socket.recvfrom(Router.BUF_SIZE)
                 packet_data, interface = packet
                 self.requested_interface = interface[0]
-
-                if self.requested_interface not in [self.net1.get_name(), self.net2.get_name()]:
+                self.interfaces.keys()
+                if self.requested_interface not in list(self.interfaces.keys()):
                     self.requested_interface = None
                     continue
 
@@ -195,5 +201,6 @@ class Router:
                 self.handle_ether(layer_struct)
 
 
-router = Router()
-router.observe_traffic()
+if __name__ == '__main__':
+    router = Router()
+    router.observe_traffic()

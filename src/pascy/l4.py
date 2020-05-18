@@ -1,5 +1,5 @@
 from pascy.layer import Layer
-from pascy.fields import *
+from pascy.fields import UnsignedByte, UnsignedShort, ByteString
 
 
 class ICMPLayer(Layer):
