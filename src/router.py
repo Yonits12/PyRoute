@@ -76,6 +76,8 @@ class Router:
     INTERFACE_NAME2IP = {NET1_NAME: NET1_IP,
                         NET2_NAME: NET2_IP}
 
+    CLIENT2_IP = '2.2.2.2'
+    CLIENT1_IP = '1.1.1.2'
     BUF_SIZE = 2048
 
     def __init__(self):
@@ -160,10 +162,10 @@ class Router:
                 return None
         # ICMP
         if ip_layer.get_protocol() == ICMPLayer.PROTOCOL_ID:
-            if dest_ip == '2.2.2.2':
+            if dest_ip == Router.CLIENT2_IP:
                 packet.set_dst(Router.CLIENT2_MAC)
                 packet.set_src(Router.MAC_ROUTER_NET2)
-            elif dest_ip == '1.1.1.2':
+            elif dest_ip == Router.CLIENT1_IP:
                 packet.set_dst(Router.CLIENT1_MAC)
                 packet.set_src(Router.MAC_ROUTER_NET1)
         else:   # UDP/TCP - will be implemented 
