@@ -42,6 +42,10 @@ class RoutingTable:
     
 
 class Router:
+    """
+    Performs the main logic of a router. Forwards IP 
+    packets and responds to ARP requests """
+
     DEFAULT = '0.0.0.0'
     MASK_24_SUBNET = socket.inet_aton('255.255.255.0')
     DEFAULT_MASK = socket.inet_aton('0.0.0.0')
@@ -105,14 +109,14 @@ class Router:
             raw_socket.bind((interface, 0))
             raw_socket.send(response_packet.build())
 
-    def handle_arp(self, packet, interface):
+    def handle_arp(self, packet, in_interface):
         '''
         Handles ARP requests by unpacking them and constructing a respose packet (if needded).
 
         :param packet: the entire deconstructed packet
         :returns: a response packet after arp handling
         '''
-        interface = self.interfaces[interface]
+        interface = self.interfaces[in_interface]
         arp_request = packet.next_layer
         if (arp_request.get_opcode() == ArpLayer.OP_IS_AT) or (arp_request.get_dest_ip() != interface.ip):
             return None

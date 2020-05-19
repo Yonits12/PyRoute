@@ -46,6 +46,12 @@ class ArpLayer(Layer):
     def set_opcode(self, val):
         self.fields["opcode"].set(val)
 
+    # src_mac = property(lambda self : self.fields["src_mac"].get(), lambda self, val : self.fields["src_mac"].set(val))
+    # dest_mac = property(lambda self : self.fields["dest_mac"].get(), lambda self, val : self.fields["dest_mac"].set(val))
+    # src_ip = property(lambda self : self.fields["src_ip"].get(), lambda self, val : self.fields["src_ip"].set(val))
+    # dst_ip = property(lambda self : self.fields["dst_ip"].get(), lambda self, val : self.fields["dst_ip"].set(val))
+    # opcode = property(lambda self : self.fields["opcode"].get(), lambda self, val : self.fields["opcode"].set(val))
+
     @staticmethod
     def fields_info():
         return [UnsignedShort("hw_type", ArpLayer.HW_TYPE),
@@ -90,6 +96,10 @@ class EthernetLayer(Layer):
     
     def set_ether_type(self, val):
         self.fields["ether_type"].set(val)
+
+    # src = property(lambda self : self.fields["src"].get(), lambda self, val : self.fields["src"].set(val))
+    # dest = property(lambda self : self.fields["dst"].get(), lambda self, val : self.fields["dst"].set(val))
+    # ether_type = property(lambda self : self.fields["ether_type"].get(), lambda self, val : self.fields["ether_type"].set(val))
 
     @staticmethod
     def fields_info():

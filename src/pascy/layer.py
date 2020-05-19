@@ -4,6 +4,18 @@ from functools import lru_cache
 
 
 class Layer(ABC):
+    
+    class ConnectionMismatch(TypeError):
+        """
+        Raised when a trial to connect non-campatible 
+        layers was performed """
+
+        def __init__(self, other):
+            self.other = other
+
+        def __str__(self):
+            return "Can't link {} and {}.".format(self.__class__.__name__, self.other.__class__.__name__)
+    
     NAME = ""
     SUB_LAYERS = []
     CONNECTOR_FIELD = ""
@@ -177,4 +189,4 @@ class Layer(ABC):
             self.next_layer.connect_layer(other)    
             self.last_layer = other
         else:
-            raise Exception("Can't link {} and {}.".format(self.__class__.__name__, other.__class__.__name__))
+            raise Layer.ConnectionMismatch(other)

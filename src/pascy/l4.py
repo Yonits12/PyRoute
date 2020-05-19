@@ -1,63 +1,35 @@
 from pascy.layer import Layer
-from pascy.fields import UnsignedByte, UnsignedShort, ByteString
-
-
+from pascy.fields import UnsignedByte, UnsignedShort, UnsignedInteger, ByteString
 
 
 class UDPLayer(Layer):
-    TYPE_ECHO_REPLY = 0
-    TYPE_ECHO_REQST = 8
-    CODE_ECHO = 0
-    PROTOCOL_ID = 1
-    SIZE_OF_DATA = 56
+    PROTOCOL_ID = 17
+    NAME = "UDP"
 
-    NAME = "ICMP"
-
-    SUB_LAYERS = []
+    SUB_LAYERS = [] # DNS
 
     @staticmethod
     def fields_info():
-        return [UnsignedByte("type", ICMPLayer.TYPE_ECHO_REQST),
-                UnsignedByte("code", ICMPLayer.CODE_ECHO),
-                UnsignedShort("checksum", 0),
-                UnsignedShort("identifier", 0),
-                UnsignedShort("sequence_number", 0),
-                ByteString("data", ICMPLayer.SIZE_OF_DATA, "")]
+        return [UnsignedShort("src_port", 0),
+                UnsignedShort("dst_port", 0),
+                UnsignedShort("length", 0),
+                UnsignedShort("checksum", 0)]
 
 
-
-class ICMPLayer(Layer):
-    TYPE_ECHO_REPLY = 0
-    TYPE_ECHO_REQST = 8
-    CODE_ECHO = 0
-    PROTOCOL_ID = 1
-    SIZE_OF_DATA = 56
-
-    NAME = "ICMP"
+class TCPLayer(Layer):
+    PROTOCOL_ID = 6
+    NAME = "TCP"
 
     SUB_LAYERS = [] # FTP/SSH/NC
 
     @staticmethod
     def fields_info():
-        return [UnsignedByte("type", ICMPLayer.TYPE_ECHO_REQST),
-                UnsignedByte("code", ICMPLayer.CODE_ECHO),
-                UnsignedShort("checksum", 0),
-                UnsignedShort("identifier", 0),
-                UnsignedShort("sequence_number", 0),
-                ByteString("data", ICMPLayer.SIZE_OF_DATA, "")]
-
-# ===========================================================================
-# 
-# ICMP Echo / Echo Reply Message header info from RFC792
-#   -> http://tools.ietf.org/html/rfc792
-#     0                   1                   2                   3
-#     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-#     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#     |     Type      |     Code      |          Checksum             |
-#     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#     |           Identifier          |        Sequence Number        |
-#     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#     |     Data ...
-#     +-+-+-+-+-
-# ===========================================================================
-
+        return [UnsignedShort("src_port", 0),
+                UnsignedShort("dst_port", 0),
+                UnsignedInteger("seq_num", 0),
+                UnsignedInteger("ack_num", 0),
+                UnsignedByte('data_res_NS'),
+                UnsignedByte('flags'),
+                UnsignedShort('window_size'),
+                UnsignedShort('checksum'),
+                UnsignedShort('urgent_pointer')] # options with variable length.
