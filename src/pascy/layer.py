@@ -4,8 +4,21 @@ from functools import lru_cache
 
 
 class Layer(ABC):
+    
+    class ConnectionMismatch(TypeError):
+        """
+        Raised when a trial to connect non-campatible 
+        layers was performed """
+
+        def __init__(self, other):
+            self.other = other
+
+        def __str__(self):
+            return "Can't link {} and {}.".format(self.__class__.__name__, self.other.__class__.__name__)
+    
     NAME = ""
     SUB_LAYERS = []
+    CONNECTOR_FIELD = ""
 
     def __init__(self):
         self.next_layer = None
@@ -56,6 +69,7 @@ class Layer(ABC):
         """
         pass
 
+
     def display(self):
         content = ""
         indent = ""
@@ -104,10 +118,20 @@ class Layer(ABC):
 
     def deserialize(self, buffer: bytes):
         """
-        Deserialize this layer from a buffer
+        Deserialize this layer from a buffer into the it's fields.
+
+        :param buffer: the raw data of the source packet to desrialize.
+        :returns: the remain un-deserialized data.
+        :rtype: bytes
         """
-        # TODO: Implement this :)
-        pass
+        fields = OrderedDict()
+        for f in self.fields_info():
+            f.deserialize(buffer)
+            fields[f.name] = f
+            buffer = buffer[len(f):]
+        self.fields = fields
+        return buffer
+        
 
     def build(self) -> bytes:
         """
@@ -118,6 +142,19 @@ class Layer(ABC):
 
         else:
             return self.serialize()
+
+    def deconstruct(self, buffer:bytes):
+        '''
+        Deconstructs a raw packet to a layers hirarchy.
+
+        :param buffer: the raw packet from the socket
+        '''
+        buffer = self.deserialize(buffer)
+        for layer, _, val in self.SUB_LAYERS:
+            # find the relevant layer using the indicator which have just deserialized.
+            if val == self.fields[self.CONNECTOR_FIELD].get():
+                self / layer()
+                self.next_layer.deconstruct(buffer)
 
     def __len__(self) -> int:
         """
@@ -130,6 +167,13 @@ class Layer(ABC):
             return self.size
 
     def connect_layer(self, other):
+        '''
+        Taking a layer structure and connects it as a sub-layer.
+
+        :param other: instance of a layer to connect
+        :returns: self with other as it's sub-layer
+        :rtype: Layer
+        '''
         for layer, field, val in self.SUB_LAYERS:
             if isinstance(other, layer):
                 self.last_layer.fields[field].set(val)
@@ -141,5 +185,8 @@ class Layer(ABC):
                     self.next_layer.connect_layer(other)
 
                 return self
-
-        raise Exception("Can't link {} and {}.".format(self.__class__.__name__, other.__class__.__name__))
+        if self.next_layer:
+            self.next_layer.connect_layer(other)    
+            self.last_layer = other
+        else:
+            raise Layer.ConnectionMismatch(other)

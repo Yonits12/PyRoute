@@ -1,4 +1,5 @@
 import struct
+from socket import inet_aton, inet_ntoa
 from functools import lru_cache
 from typing import Any
 
@@ -9,6 +10,10 @@ class Endianity:
 
 
 class Field:
+    """
+    A field of a packet (e.g. ac, ip, size, ...).
+    Capable to perform serialization and deserialization to/from a socket. """
+
     FORMAT = ''
     DEFAULT_NAME = ""
 
@@ -43,7 +48,8 @@ class Field:
         return struct.pack(self.ENDIANITY + self.FORMAT, self.val)
     
     def deserialize(self, buffer: bytes):
-        self.val = struct.unpack(self.ENDIANITY + self.FORMAT, buffer[:self.size])[0]
+        val = struct.unpack(self.ENDIANITY + self.FORMAT, buffer[:self.size])[0]
+        self.val = val
 
 
 class UnsignedByte(Field):
@@ -69,6 +75,9 @@ class ByteString(Field):
 
 
 class MacAddress(Field):
+    """
+    Defines a MAC address of a node in the network """
+
     FORMAT = "6s"
 
     def __init__(self, name="mac", default="00:00:00:00:00:00"):
@@ -92,3 +101,22 @@ class MacAddress(Field):
     @lru_cache()
     def mac2str(mac):
         return ":".join("{:02X}".format(octet) for octet in mac)
+
+
+class IPv4Address(Field):
+    """
+    Defines an IP address of a node in the network """
+
+    FORMAT = "4s"
+
+    def __init__(self, name="ipv4", default="0.0.0.0"):
+        super().__init__(name, inet_aton(default))
+
+    def format_val(self):
+        return inet_ntoa(self.val)
+
+    def set(self, value):
+        if isinstance(value, str):
+            value = inet_aton(value)
+
+        super().set(value)

@@ -26,7 +26,7 @@ sudo curl -L "https://github.com/docker/compose/releases/download/1.25.4/docker-
 sudo chmod +x /usr/local/bin/docker-compose
 
 # Allow python to send packets as non-sudo
-sudo setcap cap_net_admin,cap_net_raw+eip /usr/bin/python3.5
+sudo setcap cap_net_admin,cap_net_raw+eip /usr/bin/python3.7
 
 # Pull and build image
 docker image pull ubuntu:16.04
