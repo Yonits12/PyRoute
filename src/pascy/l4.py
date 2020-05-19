@@ -2,7 +2,9 @@ from pascy.layer import Layer
 from pascy.fields import UnsignedByte, UnsignedShort, ByteString
 
 
-class ICMPLayer(Layer):
+
+
+class UDPLayer(Layer):
     TYPE_ECHO_REPLY = 0
     TYPE_ECHO_REQST = 8
     CODE_ECHO = 0
@@ -12,6 +14,28 @@ class ICMPLayer(Layer):
     NAME = "ICMP"
 
     SUB_LAYERS = []
+
+    @staticmethod
+    def fields_info():
+        return [UnsignedByte("type", ICMPLayer.TYPE_ECHO_REQST),
+                UnsignedByte("code", ICMPLayer.CODE_ECHO),
+                UnsignedShort("checksum", 0),
+                UnsignedShort("identifier", 0),
+                UnsignedShort("sequence_number", 0),
+                ByteString("data", ICMPLayer.SIZE_OF_DATA, "")]
+
+
+
+class ICMPLayer(Layer):
+    TYPE_ECHO_REPLY = 0
+    TYPE_ECHO_REQST = 8
+    CODE_ECHO = 0
+    PROTOCOL_ID = 1
+    SIZE_OF_DATA = 56
+
+    NAME = "ICMP"
+
+    SUB_LAYERS = [] # FTP/SSH/NC
 
     @staticmethod
     def fields_info():

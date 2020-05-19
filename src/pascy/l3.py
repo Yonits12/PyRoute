@@ -15,7 +15,6 @@ class IPv4Layer(Layer):
     SUB_LAYERS = [
         # TCP/UDP
         [ICMPLayer, CONNECTOR_FIELD, ICMPLayer.PROTOCOL_ID]
-        # FTP/SSH/NC
     ]
 
     # Getters
